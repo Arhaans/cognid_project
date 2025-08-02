@@ -24,7 +24,6 @@ def load_llava_med_no_quant():
             model_path=model_path,
             model_base=None,
             model_name=get_model_name_from_path(model_path),
-            torch_dtype=torch.float16,
             device_map="auto"
         )
         print("✔️ Model loaded on GPU (FP16)")
@@ -35,8 +34,7 @@ def load_llava_med_no_quant():
         tokenizer, model, image_processor, context_len = load_pretrained_model(
             model_path=model_path,
             model_base=None,
-            model_name=get_model_name_from_path(model_path),
-            torch_dtype=torch.float32,  # Use FP32 for CPU
+            model_name=get_model_name_from_path(model_path),  
             device_map="cpu"
         )
         print("✔️ Model loaded on CPU (FP32)")
@@ -125,6 +123,7 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
 
 
 
