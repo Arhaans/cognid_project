@@ -13,7 +13,7 @@ from llava.conversation import conv_templates
 from PIL import Image
 from datetime import datetime
 
-def load_llava_med_robust():
+def load_llava_med_no_quant():
     """Load LLaVA-Med with multiple fallback strategies"""
     model_path = "microsoft/llava-med-v1.5-mistral-7b"
     
