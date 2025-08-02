@@ -67,7 +67,9 @@ Format your response as a formal radiological report."""
     
     # Prepare conversation
     print("Preparing analysis...")
-    conv = conv_templates["llava_med"].copy()
+    # Add this line before the conv assignment to see available templates
+    print("Available conversation templates:", list(conv_templates.keys()))
+    conv = conv_templates["llava_v1"].copy() 
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
     conv.append_message(conv.roles[1], None)
     prompt_formatted = conv.get_prompt()
@@ -107,4 +109,5 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
 
