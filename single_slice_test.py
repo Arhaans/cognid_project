@@ -36,16 +36,15 @@ def analyze_brain_slice():
     tokenizer, model, image_processor, context_len = load_llava_med_no_quant()
     
     # Path to your slice 75
-    slice_path = "/cs/home/psaas6/Data/ExtractedSlices/CogNID010_1_AllSlices/axial/axial_slice_075.png"
+    slice_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
     
     # Check if file exists
     if not os.path.exists(slice_path):
         print(f"❌ File not found: {slice_path}")
-        print("Available files:")
-        if os.path.exists("/cs/home/psaas6/Data/ExtractedSlices/CogNID010_1_AllSlices/axial/"):
-            files = os.listdir("/cs/home/psaas6/Data/ExtractedSlices/CogNID010_1_AllSlices/axial/")
-            for f in sorted(files)[:10]:  # Show first 10 files
-                print(f"  {f}")
+        print("Available files in the project folder:")
+        project_dir = os.path.dirname(slice_path)
+        for f in sorted(os.listdir(project_dir)):
+            print("  ", f)
         return
     
     # Neuroradiologist prompt
@@ -108,3 +107,4 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
