@@ -13,21 +13,37 @@ from llava.conversation import conv_templates
 from PIL import Image
 from datetime import datetime
 
-def load_llava_med_no_quant():
-    """Load LLaVA-Med model without quantization for stability"""
+def load_llava_med_robust():
+    """Load LLaVA-Med with multiple fallback strategies"""
     model_path = "microsoft/llava-med-v1.5-mistral-7b"
     
-    print("Loading LLaVA-Med model (no quantization)...")
-    
-    # Load without any quantization to avoid dependency issues
-    tokenizer, model, image_processor, context_len = load_pretrained_model(
-        model_path=model_path,
-        model_base=None,
-        model_name=get_model_name_from_path(model_path)
-        # Removed all quantization parameters
-    )
+    try:
+        # First try: Your FP16 approach (GPU)
+        print("Trying FP16 on GPU...")
+        tokenizer, model, image_processor, context_len = load_pretrained_model(
+            model_path=model_path,
+            model_base=None,
+            model_name=get_model_name_from_path(model_path),
+            torch_dtype=torch.float16,
+            device_map="auto"
+        )
+        print("✔️ Model loaded on GPU (FP16)")
+        
+    except Exception as e:
+        # Fallback: CPU execution
+        print(f"GPU failed ({e}), trying CPU...")
+        tokenizer, model, image_processor, context_len = load_pretrained_model(
+            model_path=model_path,
+            model_base=None,
+            model_name=get_model_name_from_path(model_path),
+            torch_dtype=torch.float32,  # Use FP32 for CPU
+            device_map="cpu"
+        )
+        print("✔️ Model loaded on CPU (FP32)")
     
     return tokenizer, model, image_processor, context_len
+
+    
 
 def analyze_brain_slice():
     """Analyze CogNID010_1 brain slice with LLaVA-Med"""
@@ -109,5 +125,6 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
 
 
