@@ -22,7 +22,7 @@ def load_llava_med():
         model_path=model_path,
         model_base=None,
         model_name=get_model_name_from_path(model_path),
-        load_4bit=True,
+        load_4bit=False,
         device_map="auto"
     )
     
@@ -112,3 +112,4 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     generate_neuroradiology_report()
+
