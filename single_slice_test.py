@@ -1,54 +1,62 @@
 #!/usr/bin/env python3
 import sys
 import os
-import torch
-from PIL import Image
-from datetime import datetime
 
-# Add LLaVA-Med to Python path
+# Add LLaVA-Med to path
 sys.path.append("/cs/home/psaas6/LLaVA-Med")
 
-# LLaVA-Med imports
+import torch
 from llava.model.builder import load_pretrained_model
 from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
 from llava.conversation import conv_templates
+from PIL import Image
+from datetime import datetime
 
-def load_llava_med_model():
-    """Load LLaVA-Med with automatic device placement (multi-GPU supported via Transformers)"""
+def load_llava_med_no_quant():
+    """Load LLaVA-Med model with fallback to CPU and device_map='auto'"""
     model_path = "microsoft/llava-med-v1.5-mistral-7b"
-    print("🔄 Loading model (device_map='auto')...")
+    try:
+        print("🔄 Trying to load model with device_map='auto' (FP16 if supported)...")
+        tokenizer, model, image_processor, context_len = load_pretrained_model(
+            model_path=model_path,
+            model_base=None,
+            model_name=get_model_name_from_path(model_path),
+            device_map="auto"
+        )
+        print("✔️ Model loaded successfully with device_map='auto'")
+    except Exception as e:
+        print(f"⚠️ GPU load failed ({e}), falling back to CPU (FP32)...")
+        tokenizer, model, image_processor, context_len = load_pretrained_model(
+            model_path=model_path,
+            model_base=None,
+            model_name=get_model_name_from_path(model_path),
+            device_map="cpu"
+        )
+        print("✔️ Model loaded on CPU (FP32)")
 
-    tokenizer, model, image_processor, context_len = load_pretrained_model(
-        model_path=model_path,
-        model_base=None,
-        model_name=get_model_name_from_path(model_path),
-        device_map="auto"
-    )
-
-    print("✅ Model loaded")
     return tokenizer, model, image_processor, context_len
 
 def analyze_brain_slice():
-    """Run image-based prompt through LLaVA-Med and print formatted report"""
+    """Analyze axial brain slice using LLaVA-Med"""
 
-    tokenizer, model, image_processor, context_len = load_llava_med_model()
-    model_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer, model, image_processor, context_len = load_llava_med_no_quant()
 
-    # Load brain slice
+    # Use model internals (accounting for possible device map sharding)
+    model_config = model.config
+    model_to_use = model
+    model_device = next(model_to_use.parameters()).device
+
     slice_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
     if not os.path.exists(slice_path):
-        print(f"❌ Image file not found: {slice_path}")
+        print(f"❌ File not found: {slice_path}")
+        print("Available files in the project folder:")
+        project_dir = os.path.dirname(slice_path)
+        for f in sorted(os.listdir(project_dir)):
+            print("  ", f)
         return
 
-    image = Image.open(slice_path).convert('RGB')
-    model_config = model.config
-    image_tensor = process_images([image], image_processor, model_config)
-    image_tensor = image_tensor[0].to(model_device, dtype=torch.float32)  # ✅ Ensure single Tensor
-
-    print("📷 Image tensor shape:", image_tensor.shape)
-
-    # Construct prompt
+    # Prompt for analysis
     prompt = """You are a neuroradiologist with expertise in neurodegenerative disorders. Analyze this brain MRI slice for signs of neurodegeneration, atrophy, or abnormalities consistent with Alzheimer's disease or any neurodegenerative disease. 
 
 Please provide a detailed radiological report that includes:
@@ -60,21 +68,33 @@ Please provide a detailed radiological report that includes:
 
 Format your response as a formal radiological report."""
 
+    print("🖼️ Loading and preprocessing image...")
+    image = Image.open(slice_path).convert("RGB")
+    image_tensor = process_images([image], image_processor, model_config)
+    image_tensor = image_tensor[0].to(model_device, dtype=torch.float32)
+
+    print("✍️ Preparing prompt...")
     conv = conv_templates["llava_v1"].copy()
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
     conv.append_message(conv.roles[1], None)
     prompt_formatted = conv.get_prompt()
 
     input_ids = tokenizer_image_token(
-        prompt_formatted, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt'
-    ).unsqueeze(0).to(model_device)
+        prompt_formatted, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
+    )
 
-    # Generate report
-    print("🧠 Generating neuroradiology report...")
+    if input_ids is None:
+        raise ValueError("❌ tokenizer_image_token returned None. Check tokenizer or prompt.")
+
+    input_ids = input_ids.unsqueeze(0).to(model_device)
+
+    print(f"📏 input_ids shape: {input_ids.shape}, image_tensor shape: {image_tensor.shape}")
+    print("🤖 Generating neuroradiology report...")
+
     with torch.inference_mode():
-        output_ids = model.generate(
+        output_ids = model_to_use.generate(
             input_ids=input_ids,
-            images=image_tensor,  # ✅ Correct shape
+            images=image_tensor,
             do_sample=True,
             temperature=0.1,
             max_new_tokens=1024,
@@ -84,7 +104,6 @@ Format your response as a formal radiological report."""
     response = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0]
     response = response.split("ASSISTANT:")[-1].strip()
 
-    # Display formatted output
     print("\n" + "=" * 80)
     print("🧠 NEURORADIOLOGY REPORT - LLaVA-Med Analysis")
     print("=" * 80)
@@ -92,7 +111,7 @@ Format your response as a formal radiological report."""
     print(f"Image: axial_slice_075.png (256×256)")
     print(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("-" * 80)
-    print("\nRADIOLOGICAL ANALYSIS:\n")
+    print("\nRADIOLOGICAL ANALYSIS:")
     print(response)
     print("\n" + "=" * 80)
 
