@@ -6,7 +6,7 @@ import torch
 import sys
 import os
 from PIL import Image
-from transformers import AutoTokenizer, AutoModelForVision2Seq, AutoProcessor
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoProcessor
 from datetime import datetime
 
 def analyze_brain_slice_neurodegeneration(image_path, model_path):
@@ -17,7 +17,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     
     # Load tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-    model = AutoModelForVision2Seq.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         model_path, 
         local_files_only=True,
         torch_dtype=torch.float16,
@@ -55,7 +55,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     ]
     
     # Process inputs
-    inputs = processor.apply_chat_template(conversation, return_tensors="pt").to(model.device)
+    inputs = processor.apply_chat_template(conversation, return_tensors="pt")
     
     # Generate response
     print("Generating neurodegeneration analysis...")
@@ -89,10 +89,6 @@ if __name__ == "__main__":
         print(f"❌ Error: Brain MRI image not found at {image_path}")
         sys.exit(1)
 
-    if not os.path.exists(model_path):
-        print(f"❌ Error: LLaVA-Med model not found at {model_path}")
-        sys.exit(1)
-
     try:
         result = analyze_brain_slice_neurodegeneration(image_path, model_path)
 
@@ -115,4 +111,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         sys.exit(1)
-
