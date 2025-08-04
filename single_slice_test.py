@@ -88,7 +88,7 @@ Format your response as a formal radiological report."""
 
     input_ids = input_ids.unsqueeze(0).to(model_device)
 
-    print(f"📏 input_ids shape: {input_ids.shape}, image_tensor shape: {image_tensor.shape}")
+    print(f"📏 input_ids shape: {input_ids.shape}, image_tensor batch size: {len(image_tensor)}")
     print("🤖 Generating neuroradiology report...")
 
     with torch.inference_mode():
@@ -117,4 +117,5 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
 
