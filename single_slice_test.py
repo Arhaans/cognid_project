@@ -7,6 +7,7 @@ import sys
 import os
 from PIL import Image
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoProcessor
+from datetime import datetime  # Add this at the top
 
 def analyze_brain_slice_neurodegeneration(image_path, model_path):
     """
@@ -77,7 +78,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
 if __name__ == "__main__":
     # Configuration
     image_path = "./axial_slice_075.png"  # Your brain slice in cognid_project folder
-    model_path = "/cs/home/psaas6/models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b"   # Local model path
+    model_path = "/cs/home/psaas6/models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b/snapshots/f2f72301dc934e74948b5802c87dbc83d100e6bd"   # Local model path
     
     # Expand the model path
     model_path = os.path.expanduser(model_path)
@@ -123,4 +124,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         sys.exit(1)
+
 
