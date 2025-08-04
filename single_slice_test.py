@@ -76,14 +76,19 @@ def analyze_brain_slice():
     print("🧠 Generating radiology report...")
     try:
         print(f"⚙️ Calling model.generate() with:\n   input_ids.shape: {input_ids.shape}\n   image_tensor.shape: {image_tensor.shape}")
+        # In your analyze_brain_slice function, replace the generation call with:
         with torch.inference_mode():
             output_ids = model.generate(
-                input_ids=input_ids,
-                images=image_tensor.unsqueeze(0),  # Add batch dimension here
-                do_sample=True,
-                temperature=0.1,
-                max_new_tokens=1024
-            )
+            input_ids,
+            images=image_tensor,  # Remove the list wrapper
+            image_sizes=[image.size],  # Add this line
+            do_sample=True,
+            temperature=0.1,
+            max_new_tokens=1024
+            
+        
+    )
+
         
         output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
         report = output.split("ASSISTANT:")[-1].strip()
@@ -104,3 +109,4 @@ def analyze_brain_slice():
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
