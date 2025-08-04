@@ -14,43 +14,37 @@ from PIL import Image
 from datetime import datetime
 
 def load_llava_med_no_quant():
-    """Load LLaVA-Med with multiple fallback strategies and multi-GPU support"""
+    """Load LLaVA-Med with fallback and multi-GPU support via device_map='auto'"""
     model_path = "microsoft/llava-med-v1.5-mistral-7b"
 
     try:
-        print("Trying FP16 on GPU(s)...")
+        print("Trying to load model on GPU(s) with device_map='auto'...")
         tokenizer, model, image_processor, context_len = load_pretrained_model(
             model_path=model_path,
             model_base=None,
             model_name=get_model_name_from_path(model_path),
             device_map="auto"
         )
-
-        if torch.cuda.device_count() > 1:
-            print(f"✔️ Using {torch.cuda.device_count()} GPUs with DataParallel")
-            model = torch.nn.DataParallel(model)
-
-        print("✔️ Model loaded on GPU(s) (FP16)")
-
+        print("✔️ Model loaded on GPU(s) (via device_map='auto')")
     except Exception as e:
-        print(f"GPU failed ({e}), trying CPU...")
+        print(f"GPU load failed ({e}), trying CPU...")
         tokenizer, model, image_processor, context_len = load_pretrained_model(
             model_path=model_path,
             model_base=None,
             model_name=get_model_name_from_path(model_path),
             device_map="cpu"
         )
-        print("✔️ Model loaded on CPU (FP32)")
+        print("✔️ Model loaded on CPU")
 
     return tokenizer, model, image_processor, context_len
 
 def analyze_brain_slice():
-    """Analyze CogNID010_1 brain slice with LLaVA-Med"""
-    
+    """Analyze brain MRI slice with LLaVA-Med"""
+
     tokenizer, model, image_processor, context_len = load_llava_med_no_quant()
-    
+
     slice_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
-    
+
     if not os.path.exists(slice_path):
         print(f"❌ File not found: {slice_path}")
         print("Available files in the project folder:")
@@ -71,13 +65,15 @@ Please provide a detailed radiological report that includes:
 Format your response as a formal radiological report."""
 
     print("Loading image...")
-    model_config = model.module.config if isinstance(model, torch.nn.DataParallel) else model.config
-    model_device = model.module.device if isinstance(model, torch.nn.DataParallel) else model.device
     image = Image.open(slice_path).convert('RGB')
+    model_config = model.config
     image_tensor = process_images([image], image_processor, model_config)
-    image_tensor = [img.to(model_device, dtype=torch.float32) for img in image_tensor]
 
-    print("Preparing analysis...")
+    # Use float32 to avoid CLIP execution errors
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    image_tensor = [img.to(device, dtype=torch.float32) for img in image_tensor]
+
+    print("Preparing prompt...")
     print("Available conversation templates:", list(conv_templates.keys()))
     conv = conv_templates["llava_v1"].copy()
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
@@ -86,13 +82,12 @@ Format your response as a formal radiological report."""
 
     input_ids = tokenizer_image_token(
         prompt_formatted, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt'
-    ).unsqueeze(0).to(model_device)
+    ).unsqueeze(0).to(device)
 
     print("Generating neuroradiology report...")
-    model_to_use = model.module if isinstance(model, torch.nn.DataParallel) else model
     with torch.inference_mode():
-        output_ids = model_to_use.generate(
-            input_ids,
+        output_ids = model.generate(
+            input_ids=input_ids,
             images=image_tensor,
             do_sample=True,
             temperature=0.1,
@@ -116,4 +111,3 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
-
