@@ -16,13 +16,16 @@ from llava.conversation import conv_templates
 def load_llava_med():
     model_path = "microsoft/llava-med-v1.5-mistral-7b"
     print("🔄 Loading LLaVA-Med...")
+
     tokenizer, model, image_processor, context_len = load_pretrained_model(
         model_path=model_path,
         model_base=None,
         model_name=get_model_name_from_path(model_path),
         device_map="auto"
     )
-    print("✔️ Model loaded.")
+
+    print("✔️ Model loaded successfully.")
+    print(f"🧠 Model device: {next(model.parameters()).device}")
     return tokenizer, model, image_processor, context_len
 
 def analyze_brain_slice():
@@ -31,13 +34,19 @@ def analyze_brain_slice():
 
     image_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
     if not os.path.exists(image_path):
-        print(f"❌ Image not found: {image_path}")
-        return
+        raise FileNotFoundError(f"❌ Image not found at: {image_path}")
 
+    print(f"📷 Loading image from: {image_path}")
     image = Image.open(image_path).convert("RGB")
+
+    print("🖼️ Processing image...")
     image_tensor = process_images([image], image_processor, model.config)[0]
+    if image_tensor is None:
+        raise ValueError("❌ process_images returned None.")
+    print(f"✅ Image tensor shape: {image_tensor.shape}")
     image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float32)
 
+    # Construct prompt
     prompt = (
         "You are a neuroradiologist with expertise in neurodegenerative disorders. "
         "Analyze this brain MRI slice for signs of neurodegeneration, atrophy, or abnormalities "
@@ -51,14 +60,22 @@ def analyze_brain_slice():
         "Respond in a formal radiology report format."
     )
 
+    print("📝 Building conversation prompt...")
     conv = conv_templates["llava_v1"].copy()
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
     conv.append_message(conv.roles[1], None)
     prompt_text = conv.get_prompt()
 
+    print("📜 Final prompt text:\n", prompt_text[:300], "...\n")  # Preview prompt
+
+    print("🧪 Tokenizing prompt...")
     input_ids = tokenizer_image_token(
         prompt_text, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
-    ).unsqueeze(0).to(device)
+    )
+    if input_ids is None:
+        raise ValueError("❌ tokenizer_image_token returned None. Check the prompt formatting or tokenizer.")
+    print(f"✅ Input token shape (before batch dim): {input_ids.shape}")
+    input_ids = input_ids.unsqueeze(0).to(device)
 
     print("🧠 Generating radiology report...")
     with torch.inference_mode():
@@ -70,6 +87,7 @@ def analyze_brain_slice():
             max_new_tokens=1024
         )
 
+    print("📤 Decoding output...")
     output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
     report = output.split("ASSISTANT:")[-1].strip()
 
