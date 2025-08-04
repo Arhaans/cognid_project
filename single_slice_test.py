@@ -1,112 +1,125 @@
 #!/usr/bin/env python3
-
-import os
-from datetime import datetime
-from PIL import Image
+"""
+Neurodegeneration analysis using LLaVA-Med for brain MRI slice
+"""
 import torch
+import sys
+import os
+from PIL import Image
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoProcessor
 
-from llava.model.builder import load_pretrained_model
-from llava.mm_utils import process_images, tokenizer_image_token, get_model_name_from_path
-from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
-from llava.conversation import conv_templates
-
-def load_llava_med():
-    model_path = "microsoft/llava-med-v1.5-mistral-7b"
-    model_name = get_model_name_from_path(model_path)
-
-    print(f"🔄 Loading LLaVA-Med from: {model_path} (model_name: {model_name})")
-
-    tokenizer, model, image_processor, context_len = load_pretrained_model(
-        model_path=model_path,
-        model_base=None,  # Changed from model_base to None
-        model_name=model_name,
+def analyze_brain_slice_neurodegeneration(image_path, model_path):
+    """
+    Detailed neurodegeneration analysis of brain MRI slice using LLaVA-Med
+    """
+    print(f"Loading LLaVA-Med model from: {model_path}")
+    
+    # Load tokenizer and model
+    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, 
+        local_files_only=True,
+        torch_dtype=torch.float16,
         device_map="auto"
     )
-
-    print(f"✅ Model loaded. Context length: {context_len}")
-    print(f"🔍 Vision tower: {getattr(model.config, 'vision_tower', 'None')}")
-
-    return tokenizer, model, image_processor, context_len
-
-def analyze_brain_slice():
-    tokenizer, model, image_processor, context_len = load_llava_med()
-    device = next(model.parameters()).device
-    print(f"🖥️ Running on device: {device}")
-
-    image_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
-    print(f"📷 Loading image from: {image_path}")
-    if not os.path.exists(image_path):
-        print(f"❌ Image not found: {image_path}")
-        return
-
-    image = Image.open(image_path).convert("RGB")
-    print("🖼️ Processing image...")
-    image_tensor = process_images([image], image_processor, model.config)[0]
-    # Remove the extra unsqueeze - the tensor should be [3, 336, 336]
-    image_tensor = image_tensor.to(device, dtype=torch.float16)  # Changed to float16
-    print(f"✅ Image tensor shape: {image_tensor.shape}")
-
-    # Prompt setup
-    print("📝 Building conversation prompt...")
-    prompt = (
+    processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+    
+    # Load and process image
+    print(f"Loading brain MRI image: {image_path}")
+    image = Image.open(image_path).convert('RGB')
+    
+    # Neuroradiology expert prompt for neurodegeneration analysis
+    neurodegeneration_prompt = (
         "You are a neuroradiologist with expertise in neurodegenerative disorders. "
         "Analyze this brain MRI slice for signs of neurodegeneration, atrophy, or abnormalities "
-        "consistent with Alzheimer's disease or other neurodegenerative disorders.\n\n"
-        "Provide:\n"
-        "1. Anatomical structure descriptions\n"
-        "2. Ventricular size/morphology\n"
-        "3. Cortical thickness/atrophy\n"
-        "4. Signal abnormalities or lesions\n"
-        "5. Overall impression and differential diagnosis\n\n"
-        "Respond in a formal radiology report format."
+        "consistent with Alzheimer's disease or any neurodegenerative disease.\n\n"
+        "Please provide a detailed radiological report that includes:\n"
+        "1. Description of visible anatomical structures\n"
+        "2. Assessment of ventricular size and morphology\n"
+        "3. Evaluation of cortical thickness and any atrophy\n"
+        "4. Identification of any abnormal signal intensities or lesions\n"
+        "5. Overall impression and differential diagnosis considerations\n\n"
+        "Format your response as a formal radiological report."
     )
-
-    conv = conv_templates["llava_v1"].copy()
-    conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
-    conv.append_message(conv.roles[1], None)
-    prompt_text = conv.get_prompt()
-    print(f"📜 Final prompt text:\n{prompt_text[:300]}...")
-
-    print("🧪 Tokenizing prompt...")
-    input_ids = tokenizer_image_token(
-        prompt_text, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
-    ).unsqueeze(0).to(device)
-    print(f"✅ Input token shape: {input_ids.shape}")
-
-    print("🧠 Generating radiology report...")
-    try:
-        print(f"⚙️ Calling model.generate() with:\n   input_ids.shape: {input_ids.shape}\n   image_tensor.shape: {image_tensor.shape}")
-        # In your analyze_brain_slice function, replace the generation call with:
-        with torch.inference_mode():
-            output_ids = model.generate(
-            input_ids,
-            images=image_tensor,  # Remove the list wrapper
-            image_sizes=[image.size],  # Add this line
+    
+    # Prepare conversation
+    conversation = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": neurodegeneration_prompt}
+            ]
+        }
+    ]
+    
+    # Process inputs
+    inputs = processor.apply_chat_template(conversation, return_tensors="pt")
+    
+    # Generate response
+    print("Generating neurodegeneration analysis...")
+    print("=" * 80)
+    with torch.inference_mode():
+        output_ids = model.generate(
+            **inputs,
             do_sample=True,
-            temperature=0.1,
-            max_new_tokens=1024
-            
-        
-    )
-
-        
-        output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        report = output.split("ASSISTANT:")[-1].strip()
-
-        print("\n" + "=" * 80)
-        print("🧾 LLaVA-Med RADIOLOGY REPORT")
-        print("=" * 80)
-        print(f"Image: {os.path.basename(image_path)}")
-        print(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("-" * 80)
-        print(report)
-        print("=" * 80)
-
-    except Exception as e:
-        print(f"❌ model.generate() failed: {e}")
-        import traceback
-        traceback.print_exc()
+            temperature=0.1,  # Lower temperature for more focused medical analysis
+            top_p=0.9,
+            max_new_tokens=1024,  # Longer response for detailed report
+            use_cache=True
+        )
+    
+    # Decode response
+    response = processor.decode(output_ids[0], skip_special_tokens=True)
+    
+    return response
 
 if __name__ == "__main__":
-    analyze_brain_slice()
-
+    # Configuration
+    image_path = "./axial_slice_075.png"  # Your brain slice in cognid_project folder
+    model_path = "~/models/llava-med-v1.5"  # Local model path
+    
+    # Expand the model path
+    model_path = os.path.expanduser(model_path)
+    
+    print("🧠 LLaVA-Med Neurodegeneration Analysis")
+    print("=" * 80)
+    print(f"Image: {os.path.abspath(image_path)}")
+    print(f"Model: {model_path}")
+    print(f"Analysis: Neurodegeneration & Alzheimer's Disease Assessment")
+    print("=" * 80)
+    
+    # Check if image exists
+    if not os.path.exists(image_path):
+        print(f"❌ Error: Brain MRI image not found at {image_path}")
+        sys.exit(1)
+    
+    # Check if model exists
+    if not os.path.exists(model_path):
+        print(f"❌ Error: LLaVA-Med model not found at {model_path}")
+        sys.exit(1)
+    
+    try:
+        # Perform neurodegeneration analysis
+        result = analyze_brain_slice_neurodegeneration(image_path, model_path)
+        
+        print("\n🏥 NEURORADIOLOGY REPORT")
+        print("=" * 80)
+        print(result)
+        print("=" * 80)
+        
+        # Save report to file
+        with open("neurodegeneration_report.txt", "w") as f:
+            f.write("NEURORADIOLOGY REPORT - NEURODEGENERATION ANALYSIS\n")
+            f.write("=" * 80 + "\n")
+            f.write(f"Image: {os.path.abspath(image_path)}\n")
+            f.write(f"Model: LLaVA-Med v1.5\n")
+            f.write(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(result)
+        
+        print(f"\n📄 Report saved to: neurodegeneration_report.txt")
+        
+    except Exception as e:
+        print(f"❌ Error during analysis: {e}")
+        sys.exit(1)
