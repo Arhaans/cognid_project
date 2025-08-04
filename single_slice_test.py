@@ -6,8 +6,8 @@ import torch
 import sys
 import os
 from PIL import Image
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoProcessor
-from datetime import datetime  # Add this at the top
+from transformers import AutoTokenizer, AutoModelForVision2Seq, AutoProcessor
+from datetime import datetime
 
 def analyze_brain_slice_neurodegeneration(image_path, model_path):
     """
@@ -17,7 +17,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     
     # Load tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-    model = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForVision2Seq.from_pretrained(
         model_path, 
         local_files_only=True,
         torch_dtype=torch.float16,
@@ -29,7 +29,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     print(f"Loading brain MRI image: {image_path}")
     image = Image.open(image_path).convert('RGB')
     
-    # Neuroradiology expert prompt for neurodegeneration analysis
+    # Expert prompt for neurodegeneration analysis
     neurodegeneration_prompt = (
         "You are a neuroradiologist with expertise in neurodegenerative disorders. "
         "Analyze this brain MRI slice for signs of neurodegeneration, atrophy, or abnormalities "
@@ -55,7 +55,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     ]
     
     # Process inputs
-    inputs = processor.apply_chat_template(conversation, return_tensors="pt")
+    inputs = processor.apply_chat_template(conversation, return_tensors="pt").to(model.device)
     
     # Generate response
     print("Generating neurodegeneration analysis...")
@@ -64,52 +64,43 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
         output_ids = model.generate(
             **inputs,
             do_sample=True,
-            temperature=0.1,  # Lower temperature for more focused medical analysis
+            temperature=0.1,
             top_p=0.9,
-            max_new_tokens=1024,  # Longer response for detailed report
+            max_new_tokens=1024,
             use_cache=True
         )
     
     # Decode response
     response = processor.decode(output_ids[0], skip_special_tokens=True)
-    
     return response
 
 if __name__ == "__main__":
-    # Configuration
-    image_path = "./axial_slice_075.png"  # Your brain slice in cognid_project folder
-    model_path = "/cs/home/psaas6/models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b/snapshots/f2f72301dc934e74948b5802c87dbc83d100e6bd"   # Local model path
-    
-    # Expand the model path
-    model_path = os.path.expanduser(model_path)
-    
+    image_path = "./axial_slice_075.png"
+    model_path = "/cs/home/psaas6/models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b/snapshots/f2f72301dc934e74948b5802c87dbc83d100e6bd"
+
     print("🧠 LLaVA-Med Neurodegeneration Analysis")
     print("=" * 80)
     print(f"Image: {os.path.abspath(image_path)}")
     print(f"Model: {model_path}")
     print(f"Analysis: Neurodegeneration & Alzheimer's Disease Assessment")
     print("=" * 80)
-    
-    # Check if image exists
+
     if not os.path.exists(image_path):
         print(f"❌ Error: Brain MRI image not found at {image_path}")
         sys.exit(1)
-    
-    # Check if model exists
+
     if not os.path.exists(model_path):
         print(f"❌ Error: LLaVA-Med model not found at {model_path}")
         sys.exit(1)
-    
+
     try:
-        # Perform neurodegeneration analysis
         result = analyze_brain_slice_neurodegeneration(image_path, model_path)
-        
+
         print("\n🏥 NEURORADIOLOGY REPORT")
         print("=" * 80)
         print(result)
         print("=" * 80)
-        
-        # Save report to file
+
         with open("neurodegeneration_report.txt", "w") as f:
             f.write("NEURORADIOLOGY REPORT - NEURODEGENERATION ANALYSIS\n")
             f.write("=" * 80 + "\n")
@@ -118,11 +109,9 @@ if __name__ == "__main__":
             f.write(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
             f.write(result)
-        
+
         print(f"\n📄 Report saved to: neurodegeneration_report.txt")
-        
+
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         sys.exit(1)
-
-
