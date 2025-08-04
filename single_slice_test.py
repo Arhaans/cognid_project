@@ -16,12 +16,17 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     print(f"Loading LLaVA-Med model from: {model_path}")
     
     # Load tokenizer and model
-    # tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
     # Load model directly
-    from transformers import AutoModelForCausalLM
-    model = AutoModelForCausalLM.from_pretrained("microsoft/llava-med-v1.5-mistral-7b", torch_dtype="auto"),
-    # processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+    # from transformers import AutoModelForCausalLM
+    # model = AutoModelForCausalLM.from_pretrained("microsoft/llava-med-v1.5-mistral-7b", torch_dtype="auto"),
     
+    model = AutoModelForVision2Seq.from_pretrained(
+        model_path,
+        torch_dtype=torch.float16,
+        device_map="auto"
+    )
+    processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
     # Load and process image
     print(f"Loading brain MRI image: {image_path}")
     image = Image.open(image_path).convert('RGB')
@@ -74,7 +79,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
 if __name__ == "__main__":
     image_path = "./axial_slice_075.png"
     main_path="/cs/home/psaas6/cognid_project"
-    model_path = os.path.join(main_path,"models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b/snapshots/f2f72301dc934e74948b5802c87dbc83d100e6bd")
+    model_path = os.path.join(main_path,"models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b/blobs/ef2190dc6c2a940e60f03f5fdb4dddb2320eb87801aeca5c40b0a28ce8aa420e")
 
     print("🧠 LLaVA-Med Neurodegeneration Analysis")
     print("=" * 80)
@@ -109,5 +114,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         sys.exit(1)
+
 
 
