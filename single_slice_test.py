@@ -95,7 +95,7 @@ Format your response as a formal radiological report."""
     with torch.inference_mode():
         output_ids = model_to_use.generate(
             input_ids=input_ids,
-            images=image_tensor,
+            images=[image_tensor],
             do_sample=True,
             temperature=0.1,
             max_new_tokens=1024,
@@ -118,6 +118,7 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
 
 
 
