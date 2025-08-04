@@ -71,7 +71,8 @@ Format your response as a formal radiological report."""
     print("🖼️ Loading and preprocessing image...")
     image = Image.open(slice_path).convert("RGB")
     image_tensor = process_images([image], image_processor, model_config)
-    image_tensor = [img.to(model_device, dtype=torch.float32) for img in image_tensor]
+    image_tensor = image_tensor[0].unsqueeze(0).to(model_device, dtype=torch.float32)
+
 
     print("✍️ Preparing prompt...")
     conv = conv_templates["llava_v1"].copy()
@@ -117,5 +118,6 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
 
 
