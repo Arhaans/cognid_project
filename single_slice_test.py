@@ -76,7 +76,7 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
 
 if __name__ == "__main__":
     image_path = "./axial_slice_075.png"
-    model_path = "/cs/home/psaas6/models/llava-med-v1.5/models--microsoft--llava-med-v1.5-mistral-7b/snapshots/f2f72301dc934e74948b5802c87dbc83d100e6bd"
+    model_path = "microsoft/llava-med-v1.5-mistral-7b"
 
     print("🧠 LLaVA-Med Neurodegeneration Analysis")
     print("=" * 80)
@@ -115,3 +115,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         sys.exit(1)
+
