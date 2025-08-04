@@ -18,7 +18,6 @@ def load_llava_med_no_quant():
     model_path = "microsoft/llava-med-v1.5-mistral-7b"
 
     try:
-        # First try: FP16 on GPU(s)
         print("Trying FP16 on GPU(s)...")
         tokenizer, model, image_processor, context_len = load_pretrained_model(
             model_path=model_path,
@@ -27,7 +26,6 @@ def load_llava_med_no_quant():
             device_map="auto"
         )
 
-        # Enable multi-GPU if available
         if torch.cuda.device_count() > 1:
             print(f"✔️ Using {torch.cuda.device_count()} GPUs with DataParallel")
             model = torch.nn.DataParallel(model)
@@ -35,12 +33,11 @@ def load_llava_med_no_quant():
         print("✔️ Model loaded on GPU(s) (FP16)")
 
     except Exception as e:
-        # Fallback: CPU execution
         print(f"GPU failed ({e}), trying CPU...")
         tokenizer, model, image_processor, context_len = load_pretrained_model(
             model_path=model_path,
             model_base=None,
-            model_name=get_model_name_from_path(model_path),  
+            model_name=get_model_name_from_path(model_path),
             device_map="cpu"
         )
         print("✔️ Model loaded on CPU (FP32)")
@@ -50,10 +47,8 @@ def load_llava_med_no_quant():
 def analyze_brain_slice():
     """Analyze CogNID010_1 brain slice with LLaVA-Med"""
     
-    # Load model
     tokenizer, model, image_processor, context_len = load_llava_med_no_quant()
     
-    # Path to slice
     slice_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
     
     if not os.path.exists(slice_path):
@@ -64,7 +59,6 @@ def analyze_brain_slice():
             print("  ", f)
         return
 
-    # Neuroradiologist prompt
     prompt = """You are a neuroradiologist with expertise in neurodegenerative disorders. Analyze this brain MRI slice for signs of neurodegeneration, atrophy, or abnormalities consistent with Alzheimer's disease or any neurodegenerative disease. 
 
 Please provide a detailed radiological report that includes:
@@ -75,29 +69,29 @@ Please provide a detailed radiological report that includes:
 5. Overall impression and differential diagnosis considerations
 
 Format your response as a formal radiological report."""
-    
+
     print("Loading image...")
+    model_config = model.module.config if isinstance(model, torch.nn.DataParallel) else model.config
+    model_device = model.module.device if isinstance(model, torch.nn.DataParallel) else model.device
     image = Image.open(slice_path).convert('RGB')
-    image_tensor = process_images([image], image_processor, model.module.config if isinstance(model, torch.nn.DataParallel) else model.config)
-    image_tensor = [img.to(model.device if not isinstance(model, torch.nn.DataParallel) else model.module.device, dtype=torch.float16) for img in image_tensor]
+    image_tensor = process_images([image], image_processor, model_config)
+    image_tensor = [img.to(model_device, dtype=torch.float16) for img in image_tensor]
 
     print("Preparing analysis...")
     print("Available conversation templates:", list(conv_templates.keys()))
-    conv = conv_templates["llava_v1"].copy() 
+    conv = conv_templates["llava_v1"].copy()
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
     conv.append_message(conv.roles[1], None)
     prompt_formatted = conv.get_prompt()
 
     input_ids = tokenizer_image_token(
         prompt_formatted, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt'
-    ).unsqueeze(0)
-
-    device = model.device if not isinstance(model, torch.nn.DataParallel) else model.module.device
-    input_ids = input_ids.to(device)
+    ).unsqueeze(0).to(model_device)
 
     print("Generating neuroradiology report...")
+    model_to_use = model.module if isinstance(model, torch.nn.DataParallel) else model
     with torch.inference_mode():
-        output_ids = model.generate(
+        output_ids = model_to_use.generate(
             input_ids,
             images=image_tensor,
             do_sample=True,
