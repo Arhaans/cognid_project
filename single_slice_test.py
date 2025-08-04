@@ -75,7 +75,7 @@ Format your response as a formal radiological report."""
     model_device = model.module.device if isinstance(model, torch.nn.DataParallel) else model.device
     image = Image.open(slice_path).convert('RGB')
     image_tensor = process_images([image], image_processor, model_config)
-    image_tensor = [img.to(model_device, dtype=torch.float16) for img in image_tensor]
+    image_tensor = [img.to(model_device, dtype=torch.float32) for img in image_tensor]
 
     print("Preparing analysis...")
     print("Available conversation templates:", list(conv_templates.keys()))
@@ -116,3 +116,4 @@ Format your response as a formal radiological report."""
 
 if __name__ == "__main__":
     analyze_brain_slice()
+
