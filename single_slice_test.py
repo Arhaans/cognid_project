@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
+
 import sys
 import os
 from datetime import datetime
 from PIL import Image
+import torch
 
-# Add LLaVA-Med repo path
+# Add LLaVA-Med repo to path
 sys.path.append("/cs/home/psaas6/LLaVA-Med")
 
-import torch
+# LLaVA-Med imports
 from llava.model.builder import load_pretrained_model
 from llava.mm_utils import process_images, tokenizer_image_token, get_model_name_from_path
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
@@ -25,28 +27,30 @@ def load_llava_med():
     )
 
     print("✔️ Model loaded successfully.")
-    print(f"🧠 Model device: {next(model.parameters()).device}")
     return tokenizer, model, image_processor, context_len
 
 def analyze_brain_slice():
+    # Load model and components
     tokenizer, model, image_processor, context_len = load_llava_med()
     device = next(model.parameters()).device
+    print(f"🖥️ Model running on device: {device}")
 
+    # Load image
     image_path = "/cs/home/psaas6/cognid_project/axial_slice_075.png"
     if not os.path.exists(image_path):
-        raise FileNotFoundError(f"❌ Image not found at: {image_path}")
+        print(f"❌ Image not found: {image_path}")
+        return
 
     print(f"📷 Loading image from: {image_path}")
     image = Image.open(image_path).convert("RGB")
 
+    # Preprocess image
     print("🖼️ Processing image...")
     image_tensor = process_images([image], image_processor, model.config)[0]
-    if image_tensor is None:
-        raise ValueError("❌ process_images returned None.")
-    print(f"✅ Image tensor shape: {image_tensor.shape}")
     image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float32)
+    print(f"✅ Image tensor shape: {image_tensor.squeeze().shape}")
 
-    # Construct prompt
+    # Define prompt
     prompt = (
         "You are a neuroradiologist with expertise in neurodegenerative disorders. "
         "Analyze this brain MRI slice for signs of neurodegeneration, atrophy, or abnormalities "
@@ -60,34 +64,44 @@ def analyze_brain_slice():
         "Respond in a formal radiology report format."
     )
 
+    # Construct conversation template
     print("📝 Building conversation prompt...")
     conv = conv_templates["llava_v1"].copy()
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
     conv.append_message(conv.roles[1], None)
     prompt_text = conv.get_prompt()
+    print("📜 Final prompt text:\n", prompt_text[:400] + "..." if len(prompt_text) > 400 else prompt_text)
 
-    print("📜 Final prompt text:\n", prompt_text[:300], "...\n")  # Preview prompt
-
+    # Tokenize
     print("🧪 Tokenizing prompt...")
     input_ids = tokenizer_image_token(
         prompt_text, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
-    )
-    if input_ids is None:
-        raise ValueError("❌ tokenizer_image_token returned None. Check the prompt formatting or tokenizer.")
-    print(f"✅ Input token shape (before batch dim): {input_ids.shape}")
-    input_ids = input_ids.unsqueeze(0).to(device)
+    ).unsqueeze(0).to(device)
+    print(f"✅ Input token shape (before batch dim): {input_ids.squeeze().shape}")
 
+    # Generate response
     print("🧠 Generating radiology report...")
-    with torch.inference_mode():
+    try:
+        print("⚙️ Calling model.generate() with:")
+        print(f"   input_ids.shape: {input_ids.shape}")
+        print(f"   image_tensor.shape: {image_tensor.shape}")
+
         output_ids = model.generate(
             input_ids=input_ids,
             images=[image_tensor],
-            do_sample=True,
-            temperature=0.1,
-            max_new_tokens=1024
+            do_sample=True,              # or False for deterministic
+            temperature=0.1,             # adjust to 0.7 if needed
+            max_new_tokens=512           # reduce to 256 if GPU memory is limited
         )
 
-    print("📤 Decoding output...")
+        print("✅ model.generate() succeeded.")
+    except Exception as e:
+        print(f"❌ model.generate() failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return
+
+    # Decode and display output
     output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
     report = output.split("ASSISTANT:")[-1].strip()
 
