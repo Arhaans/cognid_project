@@ -16,14 +16,11 @@ def analyze_brain_slice_neurodegeneration(image_path, model_path):
     print(f"Loading LLaVA-Med model from: {model_path}")
     
     # Load tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path, 
-        local_files_only=True,
-        torch_dtype=torch.float16,
-        device_map="auto"
-    )
-    processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+    # tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    # Load model directly
+    from transformers import AutoModelForCausalLM
+    model = AutoModelForCausalLM.from_pretrained("microsoft/llava-med-v1.5-mistral-7b", torch_dtype="auto"),
+    # processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
     
     # Load and process image
     print(f"Loading brain MRI image: {image_path}")
@@ -112,4 +109,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error during analysis: {e}")
         sys.exit(1)
+
 
