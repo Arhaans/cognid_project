@@ -18,7 +18,7 @@ def load_llava_med():
 
     tokenizer, model, image_processor, context_len = load_pretrained_model(
         model_path=model_path,
-        model_base="microsoft/llava-med-v1.5-mistral-7b",  # ✅ critical fix
+        model_base=None,  # Changed from model_base to None
         model_name=model_name,
         device_map="auto"
     )
@@ -42,7 +42,8 @@ def analyze_brain_slice():
     image = Image.open(image_path).convert("RGB")
     print("🖼️ Processing image...")
     image_tensor = process_images([image], image_processor, model.config)[0]
-    image_tensor = image_tensor.unsqueeze(0).to(device, dtype=torch.float32)
+    # Remove the extra unsqueeze - the tensor should be [3, 336, 336]
+    image_tensor = image_tensor.to(device, dtype=torch.float16)  # Changed to float16
     print(f"✅ Image tensor shape: {image_tensor.shape}")
 
     # Prompt setup
@@ -64,13 +65,13 @@ def analyze_brain_slice():
     conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + prompt)
     conv.append_message(conv.roles[1], None)
     prompt_text = conv.get_prompt()
-    print(f"📜 Final prompt text:\n{prompt_text[:300]}...")  # Preview prompt
+    print(f"📜 Final prompt text:\n{prompt_text[:300]}...")
 
     print("🧪 Tokenizing prompt...")
     input_ids = tokenizer_image_token(
         prompt_text, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
     ).unsqueeze(0).to(device)
-    print(f"✅ Input token shape (before batch dim): {input_ids.shape[1:]}")
+    print(f"✅ Input token shape: {input_ids.shape}")
 
     print("🧠 Generating radiology report...")
     try:
@@ -78,11 +79,12 @@ def analyze_brain_slice():
         with torch.inference_mode():
             output_ids = model.generate(
                 input_ids=input_ids,
-                images=[image_tensor],
+                images=image_tensor.unsqueeze(0),  # Add batch dimension here
                 do_sample=True,
                 temperature=0.1,
                 max_new_tokens=1024
             )
+        
         output = tokenizer.decode(output_ids[0], skip_special_tokens=True)
         report = output.split("ASSISTANT:")[-1].strip()
 
@@ -97,6 +99,8 @@ def analyze_brain_slice():
 
     except Exception as e:
         print(f"❌ model.generate() failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     analyze_brain_slice()
